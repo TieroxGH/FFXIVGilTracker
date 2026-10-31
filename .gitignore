@@ -1,0 +1,18 @@
+# .NET / Visual Studio build output
+.vs/
+**/bin/
+**/obj/
+*.user
+*.suo
+
+# Local secrets and environment configuration
+.env
+.env.*
+!.env.example
+secrets/
+*.pfx
+*.p12
+
+# OS/editor files
+.DS_Store
+Thumbs.db
