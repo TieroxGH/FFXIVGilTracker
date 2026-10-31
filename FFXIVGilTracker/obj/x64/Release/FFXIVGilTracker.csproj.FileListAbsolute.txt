@@ -1,0 +1,8 @@
+C:\Users\Josh7\Desktop\FFXIV Gil Tracker\FFXIVGilTrack\FFXIVGilTracker\bin\x64\Release\FFXIVGilTrack.deps.json
+C:\Users\Josh7\Desktop\FFXIV Gil Tracker\FFXIVGilTrack\FFXIVGilTracker\bin\x64\Release\FFXIVGilTrack.dll
+C:\Users\Josh7\Desktop\FFXIV Gil Tracker\FFXIVGilTrack\FFXIVGilTracker\obj\x64\Release\FFXIVGilTracker.csproj.AssemblyReference.cache
+C:\Users\Josh7\Desktop\FFXIV Gil Tracker\FFXIVGilTrack\FFXIVGilTracker\obj\x64\Release\FFXIVGilTracker.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\Josh7\Desktop\FFXIV Gil Tracker\FFXIVGilTrack\FFXIVGilTracker\obj\x64\Release\FFXIVGilTracker.AssemblyInfoInputs.cache
+C:\Users\Josh7\Desktop\FFXIV Gil Tracker\FFXIVGilTrack\FFXIVGilTracker\obj\x64\Release\FFXIVGilTracker.AssemblyInfo.cs
+C:\Users\Josh7\Desktop\FFXIV Gil Tracker\FFXIVGilTrack\FFXIVGilTracker\obj\x64\Release\FFXIVGilTracker.csproj.CoreCompileInputs.cache
+C:\Users\Josh7\Desktop\FFXIV Gil Tracker\FFXIVGilTrack\FFXIVGilTracker\obj\x64\Release\FFXIVGilTrack.dll

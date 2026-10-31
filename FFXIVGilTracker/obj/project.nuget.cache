@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "dgSpecHash": "EjBH5a3jetA=",
+  "success": true,
+  "projectFilePath": "C:\\Users\\Josh7\\Desktop\\FFXIV Gil Tracker\\FFXIVGilTrack\\FFXIVGilTracker\\FFXIVGilTracker.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\Josh7\\.nuget\\packages\\dalamudpackager\\15.0.0\\dalamudpackager.15.0.0.nupkg.sha512",
+    "C:\\Users\\Josh7\\.nuget\\packages\\dotnet.reproduciblebuilds\\1.2.39\\dotnet.reproduciblebuilds.1.2.39.nupkg.sha512"
+  ],
+  "logs": []
+}
