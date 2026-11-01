@@ -1,4 +1,6 @@
 using Dalamud.Game.Command;
+using Dalamud.Game.Addon.Lifecycle;
+using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.IoC;
 using Dalamud.Plugin;
 using System.IO;
@@ -8,6 +10,7 @@ using FFXIVGilTrack.Windows;
 using GilTracker.Storage;
 using GilTracker.Tracking;
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Globalization;
@@ -31,6 +34,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] internal static IPluginLog Log { get; private set; } = null!;
     [PluginService] internal static IMarketBoard MarketBoard { get; private set; } = null!;
     [PluginService] internal static ICondition Condition { get; private set; } = null!;
+    [PluginService] internal static IAddonLifecycle AddonLifecycle { get; private set; } = null!;
 
     private const string CommandName = "/giltracker";
 
@@ -39,9 +43,11 @@ public sealed class Plugin : IDalamudPlugin
     public readonly WindowSystem WindowSystem = new("FFXIVGilTrack");
     private ConfigWindow ConfigWindow { get; init; }
     private JsonlEventQueue gilEventQueue = null!;
+    private JsonlRetainerEventQueue retainerEventQueue = null!;
     private BalanceMonitor balanceMonitor = null!;
 
     private IngestionApiClient? ingestionClient;
+    private RetainerIngestionApiClient? retainerIngestionClient;
     private string? activeApiUrl;
     private string? activeApiKey;
     private CancellationTokenSource? uploadCts;
@@ -53,6 +59,8 @@ public sealed class Plugin : IDalamudPlugin
     private DateTime nextGilPoll = DateTime.MinValue;
     private ulong activeCharacterContentId;
     private static readonly TimeSpan GilPollInterval = TimeSpan.FromSeconds(2);
+    // Retainer snapshots are observed only from retainer UI lifecycle events.
+    private readonly Dictionary<(string CharacterId, ulong RetainerId), (string Name, uint Gil)> lastRetainerReadings = new();
     private MainWindow MainWindow { get; init; }
 
     private bool wasBetweenAreas;
@@ -65,6 +73,8 @@ public sealed class Plugin : IDalamudPlugin
         Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
         // Create a durable local queue in Dalamud's plugin config directory.
         gilEventQueue = new JsonlEventQueue(
+            PluginInterface.GetPluginConfigDirectory());
+        retainerEventQueue = new JsonlRetainerEventQueue(
             PluginInterface.GetPluginConfigDirectory());
 
         // Start monitoring gil changes.
@@ -100,6 +110,16 @@ public sealed class Plugin : IDalamudPlugin
 
         Framework.Update += OnFrameworkUpdate;
 
+        // Opening the retainer window is the user intent signal. RequestedUpdate
+        // runs after the game applies refreshed addon data, so it catches refreshed
+        // balances without polling while the window remains open.
+        // Subscribe without a name filter while diagnosing client addon names. The
+        // handler immediately filters to retainer UI (and the generic retainer choice
+        // menu), so unrelated addon events are ignored.
+        AddonLifecycle.RegisterListener(AddonEvent.PostSetup, OnRetainerAddonEvent);
+        AddonLifecycle.RegisterListener(AddonEvent.PostShow, OnRetainerAddonEvent);
+        AddonLifecycle.RegisterListener(AddonEvent.PostRequestedUpdate, OnRetainerAddonEvent);
+
         MarketBoard.ItemPurchased += OnMarketBoardItemPurchased;
 
         // Add a simple message to the log with level set to information
@@ -111,6 +131,9 @@ public sealed class Plugin : IDalamudPlugin
     public void Dispose()
     {
         MarketBoard.ItemPurchased -= OnMarketBoardItemPurchased;
+        AddonLifecycle.UnregisterListener(AddonEvent.PostSetup, OnRetainerAddonEvent);
+        AddonLifecycle.UnregisterListener(AddonEvent.PostShow, OnRetainerAddonEvent);
+        AddonLifecycle.UnregisterListener(AddonEvent.PostRequestedUpdate, OnRetainerAddonEvent);
 
         if (uploadCts != null)
         {
@@ -121,6 +144,7 @@ public sealed class Plugin : IDalamudPlugin
         }
 
         ingestionClient?.Dispose();
+        retainerIngestionClient?.Dispose();
         Framework.Update -= OnFrameworkUpdate;
         
         // Unregister all actions to not leak anything during disposal of plugin
@@ -157,6 +181,7 @@ public sealed class Plugin : IDalamudPlugin
         if (!ClientState.IsLoggedIn)
         {
             activeCharacterContentId = 0;
+            lastRetainerReadings.Clear();
             balanceMonitor.ResetBaseline();
             nextGilPoll = DateTime.MinValue;
             return;
@@ -174,6 +199,7 @@ public sealed class Plugin : IDalamudPlugin
         if (contentId != activeCharacterContentId)
         {
             activeCharacterContentId = contentId;
+            lastRetainerReadings.Clear();
             balanceMonitor.ResetBaseline();
             nextGilPoll = DateTime.MinValue;
         }
@@ -208,10 +234,69 @@ public sealed class Plugin : IDalamudPlugin
             var dataCenterName = homeWorld.DataCenter.Value.Name.ExtractText();
 
             balanceMonitor.Tick(characterId, characterName, worldName, dataCenterName);
+
         }
         catch (Exception ex)
         {
             Log.Error(ex, "Gil Tracker failed to read or record gil.");
+        }
+    }
+
+    private void OnRetainerAddonEvent(AddonEvent type, AddonArgs args)
+    {
+        var addonName = args.AddonName;
+        if (!addonName.Contains("Retainer", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(addonName, "SelectString", StringComparison.Ordinal))
+            return;
+
+        Log.Information($"[GilTracker] Retainer UI lifecycle event: {type}, addon={addonName}.");
+
+        if (!ClientState.IsLoggedIn || PlayerState.ContentId == 0)
+            return;
+
+        try
+        {
+            var contentId = PlayerState.ContentId;
+            var characterId = GetPseudonymousCharacterId(contentId);
+            var characterName = PlayerState.CharacterName;
+            var homeWorld = PlayerState.HomeWorld.Value;
+            var worldName = homeWorld.Name.ExtractText();
+            var dataCenterName = homeWorld.DataCenter.Value.Name.ExtractText();
+
+            var retainerReadings = RetainerBalanceReader.TryReadAll();
+            if (retainerReadings is null)
+                return;
+
+            foreach (var retainer in retainerReadings)
+            {
+                var retainerKey = (characterId, retainer.RetainerId);
+                if (lastRetainerReadings.TryGetValue(retainerKey, out var previousRetainer) &&
+                    previousRetainer.Gil == retainer.Gil &&
+                    string.Equals(previousRetainer.Name, retainer.Name, StringComparison.Ordinal))
+                    continue;
+
+                var snapshot = new GilTracker.Models.RetainerSnapshotEvent(
+                    EventId: Guid.NewGuid().ToString("N"),
+                    Timestamp: DateTimeOffset.UtcNow,
+                    Balance: retainer.Gil,
+                    CharacterId: characterId,
+                    CharacterName: characterName,
+                    World: worldName,
+                    DataCenter: dataCenterName,
+                    RetainerId: retainer.RetainerId.ToString("X16", CultureInfo.InvariantCulture),
+                    RetainerName: retainer.Name);
+                retainerEventQueue.Enqueue(snapshot);
+
+                Log.Information(
+                    $"[GilTracker] Retainer gil observed: {retainer.Name} " +
+                    $"(retainer_id={retainer.RetainerId:X16}) balance={retainer.Gil}; queued for submission.");
+
+                lastRetainerReadings[retainerKey] = (retainer.Name, retainer.Gil);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "[GilTracker] Failed to read retainer gil after retainer UI update.");
         }
     }
 
@@ -232,7 +317,9 @@ public sealed class Plugin : IDalamudPlugin
             return;
 
         ingestionClient?.Dispose();
+        retainerIngestionClient?.Dispose();
         ingestionClient = null;
+        retainerIngestionClient = null;
         activeApiUrl = url;
         activeApiKey = key;
 
@@ -249,7 +336,8 @@ public sealed class Plugin : IDalamudPlugin
         }
 
         ingestionClient = new IngestionApiClient(gilEventQueue, url, key);
-        Log.Information("[GilTracker] Private HTTPS submission configured.");
+        retainerIngestionClient = new RetainerIngestionApiClient(retainerEventQueue, url, key);
+        Log.Information("[GilTracker] Private HTTPS character and retainer submission configured.");
     }
 
     private async Task FlushSubmissionLoopAsync(CancellationToken cancellationToken)
@@ -267,6 +355,16 @@ public sealed class Plugin : IDalamudPlugin
 
                     if (!success)
                         Log.Warning("[GilTracker] Submission failed; queued events will be retried.");
+                }
+
+                if (retainerIngestionClient != null)
+                {
+                    var success = await retainerIngestionClient
+                        .FlushAsync(cancellationToken)
+                        .ConfigureAwait(false);
+
+                    if (!success)
+                        Log.Warning("[GilTracker] Retainer submission failed; queued snapshots will be retried.");
                 }
 
                 await Task.Delay(InfluxFlushInterval, cancellationToken)
