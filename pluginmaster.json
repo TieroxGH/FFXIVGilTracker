@@ -3,7 +3,7 @@
     "Author": "Tyroro",
     "Name": "FFXIV Gil Tracker",
     "InternalName": "FFXIVGilTrack",
-    "AssemblyVersion": "1.0.0.0",
+    "AssemblyVersion": "1.1.0",
     "TestingAssemblyVersion": null,
     "Description": "Tracks gil balance changes and optionally submits events to your Gil Tracker dashboard.",
     "RepoUrl": "https://github.com/TieroxGH/FFXIVGilTracker",
@@ -12,8 +12,8 @@
     "Punchline": "Your gil, at a glance.",
     "IsHide": false,
     "IsTestingExclusive": false,
-    "DownloadLinkInstall": "https://github.com/TieroxGH/FFXIVGilTracker/releases/download/1.0.0/latest.zip",
-    "DownloadLinkUpdate": "https://github.com/TieroxGH/FFXIVGilTracker/releases/download/1.0.0/latest.zip",
+    "DownloadLinkInstall": "https://github.com/TieroxGH/FFXIVGilTracker/releases/download/1.1.0/latest.zip",
+    "DownloadLinkUpdate": "https://github.com/TieroxGH/FFXIVGilTracker/releases/download/1.1.0/latest.zip",
     "LastUpdate": 1793461893
   }
 ]
