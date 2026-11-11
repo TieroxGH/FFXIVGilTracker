@@ -7,6 +7,7 @@ using System.IO;
 using Dalamud.Interface.Windowing;
 using Dalamud.Plugin.Services;
 using FFXIVGilTrack.Windows;
+using FFXIVGilTrack.Tracking;
 using GilTracker.Storage;
 using GilTracker.Tracking;
 using System;
@@ -231,7 +232,7 @@ public sealed class Plugin : IDalamudPlugin
             // Use the character's home world, not the world they may be visiting.
             var homeWorld = PlayerState.HomeWorld.Value;
             var worldName = homeWorld.Name.ExtractText();
-            var dataCenterName = homeWorld.DataCenter.Value.Name.ExtractText();
+            var dataCenterName = LogicalDataCenterLookup.GetName(worldName);
 
             balanceMonitor.Tick(characterId, characterName, worldName, dataCenterName);
 
@@ -261,7 +262,7 @@ public sealed class Plugin : IDalamudPlugin
             var characterName = PlayerState.CharacterName;
             var homeWorld = PlayerState.HomeWorld.Value;
             var worldName = homeWorld.Name.ExtractText();
-            var dataCenterName = homeWorld.DataCenter.Value.Name.ExtractText();
+            var dataCenterName = LogicalDataCenterLookup.GetName(worldName);
 
             var retainerReadings = RetainerBalanceReader.TryReadAll();
             if (retainerReadings is null)
