@@ -3,7 +3,7 @@
     "Author": "Tyroro",
     "Name": "FFXIV Gil Tracker",
     "InternalName": "FFXIVGilTrack",
-    "AssemblyVersion": "1.1.1",
+    "AssemblyVersion": "1.1.1.0"
     "TestingAssemblyVersion": null,
     "Description": "Tracks gil balance changes and optionally submits events to your Gil Tracker dashboard.",
     "RepoUrl": "https://github.com/TieroxGH/FFXIVGilTracker",
